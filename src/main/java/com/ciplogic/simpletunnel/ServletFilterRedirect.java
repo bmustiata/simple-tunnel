@@ -4,15 +4,19 @@ import org.apache.commons.io.IOUtils;
 
 import javax.servlet.*;
 import javax.servlet.http.HttpServletRequest;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import javax.servlet.http.HttpServletResponse;
+import java.io.*;
 import java.net.Socket;
 import java.util.Enumeration;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class ServletFilterRedirect implements Filter {
     public static String REDIRECT_HOST = null;
     public static int REDIRECT_PORT = 80;
+
+    private static Pattern STATUS_PATTERN = Pattern.compile("^.*? (\\d+) (.*)$");
+    private static Pattern HEADER_PATTERN = Pattern.compile("^(.*?): (.*)$");
 
     public void init(FilterConfig filterConfig) throws ServletException {
     }
@@ -55,7 +59,31 @@ public class ServletFilterRedirect implements Filter {
     }
 
     private void copyResponseFromRemote(ServletResponse response, InputStream remoteInputStream) throws IOException {
-        IOUtils.copy(remoteInputStream, response.getOutputStream());
+        BufferedReader reader = new BufferedReader(new InputStreamReader(remoteInputStream));
+        HttpServletResponse httpResponse = (HttpServletResponse) response;
+
+        writeStatus(reader, httpResponse);
+        writeHeaders(reader, httpResponse);
+
+        IOUtils.copy(reader, response.getOutputStream());
+    }
+
+    private void writeHeaders(BufferedReader reader, HttpServletResponse httpResponse) throws IOException {
+        String headerLine;
+        while (!"".equals(headerLine = reader.readLine())) {
+            Matcher headerMatcher = HEADER_PATTERN.matcher(headerLine);
+            headerMatcher.matches();
+
+            httpResponse.setHeader(headerMatcher.group(1), headerMatcher.group(2));
+        }
+    }
+
+    private void writeStatus(BufferedReader reader, HttpServletResponse httpResponse) throws IOException {
+        String responseLine = reader.readLine();
+        Matcher statusMatcher = STATUS_PATTERN.matcher(responseLine);
+        statusMatcher.matches();
+
+        httpResponse.setStatus(Integer.parseInt(statusMatcher.group(1)), statusMatcher.group(2));
     }
 
     private void writeTranslatedRequest(HttpServletRequest httpRequest, RemoteConnection remoteConnection) throws IOException {
@@ -83,7 +111,7 @@ public class ServletFilterRedirect implements Filter {
                 .append(httpRequest.getProtocol())
                 .append("\r\n");
 
-        writer.write( requestLine.toString().getBytes("UTF-8") );
+        writer.write(requestLine.toString().getBytes("UTF-8"));
     }
 
     private void writeHeaders(HttpServletRequest httpRequest, OutputStream writer) throws IOException {
