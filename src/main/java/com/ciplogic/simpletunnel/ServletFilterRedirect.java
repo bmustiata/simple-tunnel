@@ -68,11 +68,22 @@ public class ServletFilterRedirect implements Filter {
     }
 
     private void writeProtocolLine(HttpServletRequest httpRequest, OutputStream writer) throws IOException {
-        String string = httpRequest.getMethod() + " " +
-                httpRequest.getRequestURI() + " " +
-                httpRequest.getProtocol() + "\r\n";
+        StringBuilder requestLine = new StringBuilder("");
 
-        writer.write(string.getBytes("UTF-8"));
+        requestLine.append(httpRequest.getMethod())
+                .append(" ")
+                .append(httpRequest.getRequestURI());
+
+        if (httpRequest.getQueryString() != null && !"".equals(httpRequest.getQueryString())) {
+            requestLine.append("?")
+                    .append(httpRequest.getQueryString());
+        }
+
+        requestLine.append(" ")
+                .append(httpRequest.getProtocol())
+                .append("\r\n");
+
+        writer.write( requestLine.toString().getBytes("UTF-8") );
     }
 
     private void writeHeaders(HttpServletRequest httpRequest, OutputStream writer) throws IOException {
